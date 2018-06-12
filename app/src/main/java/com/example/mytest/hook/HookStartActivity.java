@@ -7,17 +7,12 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.AssetManager;
-import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.content.res.XmlResourceParser;
-import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PersistableBundle;
-import android.support.annotation.NonNull;
 import android.text.TextUtils;
-import android.util.DisplayMetrics;
 import android.util.Log;
 
 import com.example.mytest.PluginManager;
@@ -72,16 +67,6 @@ public class HookStartActivity {
             this.old = old;
         }
 
-//        @Override
-//        public Activity newActivity(ClassLoader cl, String className, Intent intent)
-//                throws InstantiationException, IllegalAccessException, ClassNotFoundException {
-//            String plugin = PluginManager.getInstance().getPlugin(className);
-//            if (!TextUtils.isEmpty(plugin)) {
-//                initPlugin(context, plugin);
-//            }
-//            return super.newActivity(cl, className, intent);
-//        }
-
         public ActivityResult execStartActivity(
                 Context who, IBinder contextThread, IBinder token, Activity target,
                 Intent intent, int requestCode, Bundle options) {
@@ -114,25 +99,61 @@ public class HookStartActivity {
 
         private void injectResource(Activity activity) {
             String plugin = PluginManager.getInstance().getPlugin(activity.getClass().getName());
-            if (!TextUtils.isEmpty(plugin)) {
-                Resources resources = PluginManager.getInstance().getResources(plugin);
-                if (resources != null) {
-                    Object contextImpl = activity.getBaseContext();
-                    try {
-                        Field res = contextImpl.getClass().getDeclaredField("mResources");
-                        res.setAccessible(true);
-                        res.set(contextImpl, resources);
-
-                        Field resource = Activity.class.getSuperclass().getDeclaredField("mResources");
-                        resource.setAccessible(true);
-                        resource.set(activity, resources);
-                    } catch (NoSuchFieldException e) {
-                        e.printStackTrace();
-                    } catch (IllegalAccessException e) {
-                        e.printStackTrace();
-                    }
-                }
+            if (TextUtils.isEmpty(plugin)) {
+                return;
             }
+
+            Resources resources = PluginManager.getInstance().getResources(plugin);
+            if (resources == null) {
+                resources = loadPluginResources(plugin);
+            }
+            if (resources == null) {
+                return;
+            }
+            
+            Object contextImpl = activity.getBaseContext();
+            try {
+                Field res = contextImpl.getClass().getDeclaredField("mResources");
+                res.setAccessible(true);
+                res.set(contextImpl, resources);
+
+                Field resource = Activity.class.getSuperclass().getDeclaredField("mResources");
+                resource.setAccessible(true);
+                resource.set(activity, resources);
+            } catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private Resources loadPluginResources(String plugin) {
+            String pluginPath = PluginManager.getInstance().getPluginPath(plugin);
+            // 开始加载资源
+            AssetManager assetManager = null;
+            try {
+                assetManager = AssetManager.class.newInstance();
+                Method method = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
+                method.setAccessible(true);
+                method.invoke(assetManager, pluginPath);
+                Method strMethod = AssetManager.class.getDeclaredMethod("ensureStringBlocks");
+                strMethod.setAccessible(true);
+                strMethod.invoke(assetManager);
+                Resources resources = context.getResources();
+                Resources pluginResources = new Resources(assetManager,
+                        resources.getDisplayMetrics(), resources.getConfiguration());
+                PluginManager.getInstance().addResources(plugin, pluginResources);
+                return pluginResources;
+            } catch (InstantiationException e) {
+                e.printStackTrace();
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+            }
+            return null;
         }
 
         @Override
@@ -192,28 +213,10 @@ public class HookStartActivity {
                 // 将新生成的dexElements数组注入到PathClassLoader内部，
                 // 这样App查找类就会先从fixdex查找，在从App安装的dex里查找
                 dexElements.set(pathList, elements);
-
-                // 开始加载资源
-                AssetManager assetManager = AssetManager.class.newInstance();
-                Method method = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
-                method.setAccessible(true);
-                method.invoke(assetManager, pluginPath);
-                Method strMethod = AssetManager.class.getDeclaredMethod("ensureStringBlocks");
-                strMethod.setAccessible(true);
-                strMethod.invoke(assetManager);
-                Resources resources = context.getResources();
-                Resources pluginResources = new MyResources(assetManager,
-                        resources.getDisplayMetrics(), resources.getConfiguration(), resources);
-                PluginManager.getInstance().addResources(plugin, pluginResources);
+                PluginManager.getInstance().addPluginPath(plugin, pluginPath);
             } catch (NoSuchFieldException e) {
                 e.printStackTrace();
             } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            } catch (NoSuchMethodException e) {
-                e.printStackTrace();
-            } catch (InvocationTargetException e) {
-                e.printStackTrace();
-            } catch (InstantiationException e) {
                 e.printStackTrace();
             }
         }
@@ -259,66 +262,6 @@ public class HookStartActivity {
                         e.printStackTrace();
                     }
                 }
-            }
-        }
-    }
-
-    private static class MyResources extends Resources {
-        private Resources parent;
-        public MyResources(AssetManager assets, DisplayMetrics metrics, Configuration config, Resources parent) {
-            super(assets, metrics, config);
-            this.parent = parent;
-        }
-
-        @NonNull
-        @Override
-        public String getString(int id) throws NotFoundException {
-            try {
-                String str = super.getString(id);
-                return str;
-            } catch (Exception e) {
-                return parent.getString(id);
-            }
-        }
-
-        @NonNull
-        @Override
-        public CharSequence getText(int id) throws NotFoundException {
-            try {
-                CharSequence str = super.getText(id);
-                return str;
-            } catch (Exception e) {
-                return parent.getText(id);
-            }
-        }
-
-        @Override
-        public XmlResourceParser getLayout(int id) throws NotFoundException {
-            try {
-                XmlResourceParser parser = super.getLayout(id);
-                return parser;
-            } catch (Exception e) {
-                return parent.getLayout(id);
-            }
-        }
-
-        @Override
-        public Drawable getDrawable(int id) throws NotFoundException {
-            try {
-                Drawable drawable = super.getDrawable(id);
-                return drawable;
-            } catch (Exception e) {
-                return parent.getDrawable(id);
-            }
-        }
-
-        @Override
-        public int getColor(int id) throws NotFoundException {
-            try {
-                int color = super.getColor(id);
-                return color;
-            } catch (Exception e) {
-                return parent.getColor(id);
             }
         }
     }

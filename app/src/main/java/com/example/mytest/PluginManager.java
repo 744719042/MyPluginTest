@@ -17,6 +17,7 @@ import java.util.Map;
 public final class PluginManager {
     private Map<String, String> mPrefixPlugin = new HashMap<>();
     private Map<String, Resources> mResources = new HashMap<>();
+    private Map<String, String> mResourcePath = new HashMap<>();
 
     private PluginManager() {
 
@@ -83,6 +84,14 @@ public final class PluginManager {
 
     public static PluginManager getInstance() {
         return PluginManagerHolder.INSTANCE;
+    }
+
+    public void addPluginPath(String plugin, String pluginPath) {
+        mResourcePath.put(plugin, pluginPath);
+    }
+
+    public String getPluginPath(String key) {
+        return mResourcePath.get(key);
     }
 
     private static class PluginManagerHolder {
