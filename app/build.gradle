@@ -1,0 +1,202 @@
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.OutputKeys
+import javax.xml.transform.Transformer
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+import groovy.json.JsonOutput
+
+apply plugin: 'com.android.application'
+
+android {
+    signingConfigs {
+        release {
+            keyAlias 'myrelease'
+            keyPassword '123456'
+            storeFile file('D:/MyTest/release.keystore')
+            storePassword '123456'
+        }
+    }
+    compileSdkVersion 27
+    defaultConfig {
+        applicationId "com.example.mytest"
+        minSdkVersion 15
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+}
+
+configurations {
+    myplugin
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.0'
+    implementation 'com.android.support:design:27.1.1'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    implementation 'com.google.code.gson:gson:2.8.1'
+
+    if (!rootProject.ext.isPlugin) {
+        implementation project(':login')
+        implementation project(':order')
+    }
+}
+
+class Entity {
+    String name
+    String prefix
+}
+
+afterEvaluate {
+    if (!rootProject.ext.isPlugin) {
+        return
+    }
+
+    def prebuild = project.tasks.findByName("preBuild")
+    prebuild.doFirst {
+        Set<Project> set = [project.project(":login"), project.project(":order")]
+        def plugins = []
+        for (pro in set) {
+            Entity entity = new Entity()
+            entity.name = pro.name
+            entity.prefix = "com.example." + pro.name
+            plugins.add(entity)
+
+            def apkname = ""
+            project.copy {
+                from pro.getBuildDir().getAbsolutePath() + "/outputs/apk/release/$pro.name-release-unsigned.apk"
+                into "/src/main/assets/"
+                rename {
+                    filename ->
+                        apkname = pro.name + ".so"
+                }
+            }
+            extractManifest(pro, file("/src/main/assets/" + apkname))
+        }
+
+        File file = file("/src/main/assets/plugins.json")
+        if (!file.exists()) {
+            file.createNewFile()
+        }
+
+        String json = JsonOutput.toJson(plugins)
+        file.withPrintWriter {
+            it.print(json)
+        }
+    }
+}
+
+void extractManifest(Project pro, File file) {
+    println "Start merge file: " + file.getAbsolutePath()
+    def output = new File(project.getBuildDir(), "pluginminfests")
+    if (!output.exists()) {
+        output.mkdir()
+    }
+    def apkTmp = new File(project.getBuildDir(), "plugintmp")
+    if (!apkTmp.exists()) {
+        apkTmp.mkdir()
+    }
+
+    def plugins = new File(project.getBuildDir(), "plugins")
+    if (!plugins.exists()) {
+        plugins.mkdir()
+    }
+
+    String copyName = ""
+    copy {
+        from file
+        into plugins
+        rename {
+            filename -> copyName = filename.split("\\.")[0] + ".apk"
+        }
+    }
+    def apk = new File(plugins, copyName)
+    def command = "apktool d " + apk.getAbsolutePath() + " -f -o " + apkTmp.getAbsolutePath()
+    project.exec {
+        executable 'cmd'
+        args '/c', command
+        println 'The command is over'
+    }
+
+    copy {
+        from apkTmp.getAbsolutePath() + "/AndroidManifest.xml"
+        into output
+        rename {
+            filename -> pro.name + ".xml"
+        }
+    }
+}
+
+afterEvaluate {
+    def processManifest = project.tasks.findByName("processDebugManifest")
+    processManifest.doLast {
+        System.out.println("All output files=====================")
+        File manifestDir = null;
+        for (File file : outputs.files) {
+            System.out.println(file.getAbsolutePath())
+            if (file.getAbsolutePath().contains("full")) {
+                manifestDir = file
+                break
+            }
+        }
+
+        if (manifestDir != null) {
+            File manifestFile = new File(manifestDir, "AndroidManifest.xml")
+
+            def domParser = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            def document = domParser.parse(manifestFile)
+            document.getDocumentElement().normalize()
+
+            def manifestNode = document.getElementsByTagName("manifest").item(0)
+            def applicationNode = document.getElementsByTagName("application").item(0)
+            def output = new File(project.getBuildDir(), "pluginminfests")
+            def manifestFiles = fileTree(output.getAbsolutePath()) {
+                include "**/*.xml"
+            }
+
+            for (File file : manifestFiles) {
+                def parser = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                def doc = parser.parse(file)
+                doc.getDocumentElement().normalize()
+                def permissions = doc.getElementsByTagName("uses-permission")
+                def activities = doc.getElementsByTagName("activity")
+
+                System.out.println(permissions)
+                System.out.println(activities)
+
+                if (permissions != null) {
+                    for (node in permissions) {
+                        manifestNode.appendChild(document.adoptNode(node.cloneNode(true)))
+                    }
+                }
+
+                if (activities != null) {
+                    for (activity in activities) {
+                        applicationNode.appendChild(document.adoptNode(activity.cloneNode(true)))
+                    }
+                }
+            }
+
+            TransformerFactory transfactory = TransformerFactory.newInstance();
+            Transformer transformer = transfactory.newTransformer();
+            transformer.setOutputProperty("encoding","utf-8");
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            DOMSource source = new DOMSource(document);
+            StreamResult target = new StreamResult(manifestFile.getAbsolutePath());
+            transformer.transform(source, target);
+        }
+    }
+}
