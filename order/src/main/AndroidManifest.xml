@@ -2,14 +2,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.order">
 
-    <application>
-        <activity android:name=".OrderActivity">
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity android:name=".OrderActivity"
+            android:theme="@style/AppTheme">
             <intent-filter>
                 <action android:name="com.example.order" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <activity android:name=".OrderListActivity">
+        <activity android:name=".OrderListActivity"
+            android:theme="@style/AppTheme">
             <intent-filter>
                 <action android:name="com.example.order_list" />
                 <category android:name="android.intent.category.DEFAULT" />

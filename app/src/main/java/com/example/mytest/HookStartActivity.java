@@ -1,4 +1,4 @@
-package com.example.mytest.hook;
+package com.example.mytest;
 
 import android.app.Activity;
 import android.app.Instrumentation;
@@ -13,18 +13,21 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.Log;
-
-import com.example.mytest.PluginManager;
+import android.view.ContextThemeWrapper;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.HashMap;
 
 import dalvik.system.BaseDexClassLoader;
 import dalvik.system.DexClassLoader;
@@ -103,31 +106,114 @@ public class HookStartActivity {
                 return;
             }
 
-            Resources resources = PluginManager.getInstance().getResources(plugin);
-            if (resources == null) {
-                resources = loadPluginResources(plugin);
+            AssetManager assetManager = PluginManager.getInstance().getAssetManager(plugin);
+            if (assetManager == null) {
+                assetManager = loadPluginResources(plugin);
             }
-            if (resources == null) {
+            if (assetManager == null) {
                 return;
             }
-            
-            Object contextImpl = activity.getBaseContext();
-            try {
-                Field res = contextImpl.getClass().getDeclaredField("mResources");
-                res.setAccessible(true);
-                res.set(contextImpl, resources);
 
-                Field resource = Activity.class.getSuperclass().getDeclaredField("mResources");
-                resource.setAccessible(true);
-                resource.set(activity, resources);
-            } catch (NoSuchFieldException e) {
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
+            refreshResources(activity, assetManager);
+        }
+
+        private void refreshResources(Activity activity, AssetManager newAssetManager) {
+            try {
+
+                Resources resources = activity.getResources();
+                try {
+                    Field mAssets = Resources.class.getDeclaredField("mAssets");
+                    mAssets.setAccessible(true);
+                    mAssets.set(resources, newAssetManager);
+                } catch (Throwable ignore) {
+                    Field mResourcesImpl = Resources.class.getDeclaredField("mResourcesImpl");
+                    mResourcesImpl.setAccessible(true);
+                    Object resourceImpl = mResourcesImpl.get(resources);
+                    Field implAssets = resourceImpl.getClass().getDeclaredField("mAssets");
+                    implAssets.setAccessible(true);
+                    implAssets.set(resourceImpl, newAssetManager);
+                }
+
+                Resources.Theme theme = activity.getTheme();
+                try {
+                    Field ma = Resources.Theme.class.getDeclaredField("mAssets");
+                    ma.setAccessible(true);
+                    ma.set(theme, newAssetManager);
+                } catch (NoSuchFieldException ignore) {
+                    Field themeField = Resources.Theme.class.getDeclaredField("mThemeImpl");
+                    themeField.setAccessible(true);
+                    Object impl = themeField.get(theme);
+                    Field ma = impl.getClass().getDeclaredField("mAssets");
+                    ma.setAccessible(true);
+                    ma.set(impl, newAssetManager);
+                }
+            } catch (Throwable e) {
+                Log.e("InstantRun",
+                        "Failed to update existing theme for activity " + activity, e);
+            }
+
+            updateSystemResources(newAssetManager);
+        }
+
+        private void updateSystemResources(AssetManager newAssetManager) {
+            try {
+                Collection<WeakReference> references;
+                if (Build.VERSION.SDK_INT >= 19) {
+                    Class resourcesManagerClass = Class.forName("android.app.ResourcesManager");
+                    Method mGetInstance = resourcesManagerClass.getDeclaredMethod("getInstance", new Class[0]);
+                    mGetInstance.setAccessible(true);
+                    Object resourcesManager = mGetInstance.invoke(null, new Object[0]);
+                    try {
+                        Field fMActiveResources = resourcesManagerClass
+                                .getDeclaredField("mActiveResources");
+                        fMActiveResources.setAccessible(true);
+
+                        ArrayMap arrayMap = (ArrayMap) fMActiveResources.get(resourcesManager);
+
+                        references = (Collection<WeakReference>) arrayMap.values();
+                    } catch (NoSuchFieldException ignore) {
+                        Field mResourceReferences = resourcesManagerClass
+                                .getDeclaredField("mResourceReferences");
+                        mResourceReferences.setAccessible(true);
+                        references = (Collection) mResourceReferences.get(resourcesManager);
+                    }
+                } else {
+                    Class activityThreadClass = Class.forName("android.app.ActivityThread");
+                    Field fMActiveResources = activityThreadClass.getDeclaredField("mActiveResources");
+                    fMActiveResources.setAccessible(true);
+                    Method method = activityThreadClass.getDeclaredMethod("currentActivityThread");
+                    method.setAccessible(true);
+                    Object activityThread = method.invoke(null);
+                    HashMap<Class<?>, WeakReference> map = (HashMap<Class<?>, WeakReference>) fMActiveResources.get(activityThread);
+                    references = map.values();
+                }
+
+                for (WeakReference wr : references) {
+                    Resources resources = (Resources) wr.get();
+                    if (resources != null) {
+                        try {
+                            Field mAssets = Resources.class.getDeclaredField("mAssets");
+                            mAssets.setAccessible(true);
+                            mAssets.set(resources, newAssetManager);
+                        } catch (Throwable ignore) {
+                            Field mResourcesImpl = Resources.class.getDeclaredField("mResourcesImpl");
+                            mResourcesImpl.setAccessible(true);
+                            Object resourceImpl = mResourcesImpl.get(resources);
+                            Field implAssets = resourceImpl.getClass().getDeclaredField("mAssets");
+                            implAssets.setAccessible(true);
+                            implAssets.set(resourceImpl, newAssetManager);
+                        }
+
+                        resources.updateConfiguration(resources.getConfiguration(),
+                                resources.getDisplayMetrics());
+                    }
+                }
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
             }
         }
 
-        private Resources loadPluginResources(String plugin) {
+        private AssetManager loadPluginResources(String plugin) {
             String pluginPath = PluginManager.getInstance().getPluginPath(plugin);
             // 开始加载资源
             AssetManager assetManager = null;
@@ -136,14 +222,12 @@ public class HookStartActivity {
                 Method method = AssetManager.class.getDeclaredMethod("addAssetPath", String.class);
                 method.setAccessible(true);
                 method.invoke(assetManager, pluginPath);
+                method.invoke(assetManager, context.getApplicationContext().getPackageResourcePath());
                 Method strMethod = AssetManager.class.getDeclaredMethod("ensureStringBlocks");
                 strMethod.setAccessible(true);
                 strMethod.invoke(assetManager);
-                Resources resources = context.getResources();
-                Resources pluginResources = new Resources(assetManager,
-                        resources.getDisplayMetrics(), resources.getConfiguration());
-                PluginManager.getInstance().addResources(plugin, pluginResources);
-                return pluginResources;
+                PluginManager.getInstance().addAssetManager(plugin, assetManager);
+                return assetManager;
             } catch (InstantiationException e) {
                 e.printStackTrace();
             } catch (IllegalAccessException e) {

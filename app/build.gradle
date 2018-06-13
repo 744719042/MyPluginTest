@@ -77,7 +77,7 @@ afterEvaluate {
 
             def apkname = ""
             project.copy {
-                from pro.getBuildDir().getAbsolutePath() + "/outputs/apk/release/$pro.name-release-unsigned.apk"
+                from pro.getBuildDir().getAbsolutePath() + "/outputs/apk/debug/$pro.name-debug.apk"
                 into "/src/main/assets/"
                 rename {
                     filename ->
@@ -141,6 +141,10 @@ void extractManifest(Project pro, File file) {
 }
 
 afterEvaluate {
+    if (!rootProject.ext.isPlugin) {
+        return
+    }
+
     def processManifest = project.tasks.findByName("processDebugManifest")
     processManifest.doLast {
         System.out.println("All output files=====================")

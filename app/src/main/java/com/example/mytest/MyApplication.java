@@ -2,8 +2,6 @@ package com.example.mytest;
 
 import android.app.Application;
 
-import com.example.mytest.hook.HookStartActivity;
-
 public class MyApplication extends Application {
     private static final String TAG = "MyApplication";
 

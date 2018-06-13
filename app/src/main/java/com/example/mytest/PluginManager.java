@@ -1,6 +1,7 @@
 package com.example.mytest;
 
 import android.content.Context;
+import android.content.res.AssetManager;
 import android.content.res.Resources;
 
 
@@ -16,7 +17,7 @@ import java.util.Map;
 
 public final class PluginManager {
     private Map<String, String> mPrefixPlugin = new HashMap<>();
-    private Map<String, Resources> mResources = new HashMap<>();
+    private Map<String, AssetManager> mAssetManagers = new HashMap<>();
     private Map<String, String> mResourcePath = new HashMap<>();
 
     private PluginManager() {
@@ -49,12 +50,12 @@ public final class PluginManager {
         return "";
     }
 
-    public void addResources(String key, Resources resources) {
-        mResources.put(key, resources);
+    public void addAssetManager(String key, AssetManager manager) {
+        mAssetManagers.put(key, manager);
     }
 
-    public Resources getResources(String key) {
-        return mResources.get(key);
+    public AssetManager getAssetManager(String key) {
+        return mAssetManagers.get(key);
     }
 
     private String readPluginJson(Context context) {
