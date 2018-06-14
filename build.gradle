@@ -18,7 +18,8 @@ allprojects {
     repositories {
         google()
         jcenter()
-        maven { url "http://172.16.3.13:8083/repository/maven-public/" }
+        maven { url "http://mirrors.ibiblio.org/maven2" }
+        maven { url 'http://172.16.3.13:8083/repository/maven-public/' }
     }
 }
 

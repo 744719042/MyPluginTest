@@ -35,10 +35,6 @@ android {
     }
 }
 
-configurations {
-    myplugin
-}
-
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'com.android.support:appcompat-v7:27.1.1'
@@ -48,11 +44,6 @@ dependencies {
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
     implementation 'com.google.code.gson:gson:2.8.1'
-
-    if (!rootProject.ext.isPlugin) {
-        implementation project(':login')
-        implementation project(':order')
-    }
 }
 
 class Entity {
@@ -123,16 +114,9 @@ void extractManifest(Project pro, File file) {
             filename -> copyName = filename.split("\\.")[0] + ".apk"
         }
     }
-    def apk = new File(plugins, copyName)
-    def command = "apktool d " + apk.getAbsolutePath() + " -f -o " + apkTmp.getAbsolutePath()
-    project.exec {
-        executable 'cmd'
-        args '/c', command
-        println 'The command is over'
-    }
 
     copy {
-        from apkTmp.getAbsolutePath() + "/AndroidManifest.xml"
+        from pro.getBuildDir().getAbsolutePath() + File.separator + "intermediates/manifests/full/debug/AndroidManifest.xml"
         into output
         rename {
             filename -> pro.name + ".xml"
@@ -194,13 +178,17 @@ afterEvaluate {
                 }
             }
 
-            TransformerFactory transfactory = TransformerFactory.newInstance();
-            Transformer transformer = transfactory.newTransformer();
-            transformer.setOutputProperty("encoding","utf-8");
-            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-            DOMSource source = new DOMSource(document);
-            StreamResult target = new StreamResult(manifestFile.getAbsolutePath());
-            transformer.transform(source, target);
+            TransformerFactory transfactory = TransformerFactory.newInstance()
+            Transformer transformer = transfactory.newTransformer()
+            transformer.setOutputProperty("encoding","utf-8")
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes")
+            DOMSource source = new DOMSource(document)
+            StreamResult target = new StreamResult(manifestFile.getAbsolutePath())
+            transformer.transform(source, target)
         }
     }
+}
+
+task makeBundles() {
+
 }

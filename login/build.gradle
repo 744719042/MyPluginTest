@@ -24,6 +24,9 @@ android {
         }
     }
 
+    aaptOptions {
+        additionalParameters "--package-id", "0x80"
+    }
 }
 
 dependencies {

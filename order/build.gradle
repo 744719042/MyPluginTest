@@ -1,8 +1,4 @@
-if (rootProject.ext.isPlugin) {
-    apply plugin: 'com.android.application'
-} else {
-    apply plugin: 'com.android.library'
-}
+apply plugin: 'com.android.library'
 apply plugin: 'com.example.upload'
 
 android {
