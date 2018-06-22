@@ -1,0 +1,106 @@
+def baseBuildDir = project(":app").getBuildDir().getAbsolutePath()
+println baseBuildDir
+def baseApk = baseBuildDir + "/outputs/apk/debug/app-debug.apk"
+def baseClasses = baseBuildDir + "/intermediates/classes/debug"
+def baseR = baseBuildDir + "/generated/source/r/debug/com/example/mytest/R.java"
+def androidPath = "%ANDROID_HOME%/platforms/android-27/android.jar"
+
+def pkgMap = ['login': '0x80', 'order': '0x90']
+
+def buildDir = project.getBuildDir().getAbsolutePath()
+def genSourceDir = buildDir + "/generated/sources/r/debug/"
+def resourceDir = buildDir + "/intermediates/res"
+def classDir = buildDir + "/intermediates/classes/debug"
+def resourcePath = "$resourceDir/resources.zip"
+
+def bundleResourceDir = file('/src/main/res').getAbsolutePath()
+def manifestPath = file('/src/main/AndroidManifest.xml').getAbsolutePath()
+
+def customPackage = "com.example." + project.name
+def packageId = pkgMap[project.name]
+
+task init() {
+    File build = new File(buildDir)
+    if (build.exists()) {
+        build.deleteDir()
+    }
+    build.mkdir()
+
+    File sourceDir = new File(genSourceDir)
+    sourceDir.mkdirs()
+    File resDir = new File(resourceDir)
+    resDir.mkdirs()
+    File clsDir = new File(classDir)
+    clsDir.mkdirs()
+}
+
+/**
+ * aapt_win package -f -M D:\MyTest\order\src\main\AndroidManifest.xml -I "%ANDROID_HOME%/platforms/android-27/android.jar" -I D:\MyTest\app\build/outputs/apk/debug/app-debug.apk -S D:\MyTest\order\src\m
+ ain\res -J D:\MyTest\order\build/generated/sources/r/debug/ -m -F D:\MyTest\order\build/intermediates/res/resources.zip --custom-package com.example.order -o 'apk' --public-R-path D:\MyTest\app\build/
+ generated/source/r/debug/com/example/mytest/R.java --apk-module "0x90"
+ */
+task aaptDebug(dependsOn: 'init') {
+    StringBuilder command = new StringBuilder()
+    command.append("aapt_win package -f").append(" ")
+    command.append("-M $manifestPath").append(" ")
+    command.append("-I \"$androidPath\"").append(" ")
+    command.append("-I $baseApk").append(" ")
+    command.append("-S $bundleResourceDir").append(" ")
+    command.append("-J $genSourceDir -m").append(" ")
+    command.append("-F $resourcePath").append(" ")
+    command.append("--custom-package $customPackage -o 'apk'").append(" ")
+    command.append("--public-R-path $baseR").append(" ")
+    command.append("--apk-module \"$packageId\"").append(" ")
+
+    println command.toString()
+    project.exec {
+        executable 'cmd'
+        args '/c', command.toString()
+    }
+}
+
+/**
+ */
+task complieJavaDebug(dependsOn: 'aaptDebug') {
+    StringBuilder command = new StringBuilder()
+    command.append("javac").append(" ")
+    command.append("-classpath").append(" ")
+    command.append("$baseClasses").append(";")
+    command.append("$androidPath").append(" ")
+    command.append("@").append(generateSourceFile()).append(" ")
+    command.append("-d $classDir")
+    println command.toString()
+    project.exec {
+        executable 'cmd'
+        args '/c', command.toString()
+    }
+}
+
+String generateSourceFile() {
+    def javaPath = file('/src/main/java').getAbsolutePath()
+    def rPath = buildDir.getAbsolutePath() + "/generated/sources/r/debug/"
+
+    File file = file('source.list')
+    File javaDir = new File(javaPath)
+    File rDir = new File(rPath)
+    def list = []
+    getAllSources(javaDir, list)
+    getAllSources(rDir, list)
+    file.withPrintWriter {
+        PrintWriter pw ->
+        list.forEach {
+            pw.println(it)
+        }
+    }
+    return file.getAbsolutePath()
+}
+
+void getAllSources(File dir, List list) {
+    if (dir.isDirectory()) {
+        for (File file : dir.listFiles()) {
+            getAllSources(file, list)
+        }
+    } else {
+        list.add(dir.getAbsolutePath())
+    }
+}

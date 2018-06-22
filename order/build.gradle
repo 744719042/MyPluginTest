@@ -39,3 +39,5 @@ archive {
     buildType = "$rootProject.ext.makeAarType"
     version = "$rootProject.ext.aarVersion"
 }
+
+apply from: '../bundle.gradle'

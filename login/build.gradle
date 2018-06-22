@@ -1,8 +1,4 @@
-if (rootProject.ext.isPlugin) {
-    apply plugin: 'com.android.application'
-} else {
-    apply plugin: 'com.android.library'
-}
+apply plugin: 'com.android.library'
 apply plugin: 'com.example.upload'
 
 android {
@@ -23,10 +19,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-
-    aaptOptions {
-        additionalParameters "--package-id", "0x80"
-    }
 }
 
 dependencies {
@@ -44,3 +36,5 @@ archive {
     buildType = "$rootProject.ext.makeAarType"
     version = "$rootProject.ext.aarVersion"
 }
+
+apply from: '../bundle.gradle'
