@@ -6,6 +6,8 @@ def baseLibJar = baseLib + "/classes.jar"
 def baseR = baseBuildDir + "/generated/source/r/debug/com/example/mytest/R.java"
 def androidPath = "C:/Users/Administrator/AppData/Local/Android/sdk/platforms/android-27/android.jar"
 
+def baseAssetDir = project(":app").file("/src/main/assets/").getAbsolutePath()
+
 def pkgMap = ['login': '0x80', 'order': '0x90']
 
 def buildDir = project.getBuildDir().getAbsolutePath()
@@ -123,5 +125,49 @@ void getAllSources(File dir, List list) {
         }
     } else {
         list.add(dir.getAbsolutePath())
+    }
+}
+
+task makeDex(dependsOn: 'compileJavaDebug') {
+    String jarName = project.name + "-class.jar"
+    def command = "jar -cvf $buildDir/$jarName -C $classDir/ com/"
+    println command
+    project.exec {
+        executable 'cmd'
+        args '/c', command
+    }
+
+    String dexName = project.name + ".jar"
+    def dex = "dx --dex --output=$buildDir/$dexName $buildDir/$jarName"
+    println dex
+    project.exec {
+        executable 'cmd'
+        args '/c', dex
+    }
+}
+
+task buildBundle(type:Zip, dependsOn: 'makeDex') {
+    String dexName = project.name + ".jar"
+    String apkName = project.name + ".zip"
+
+    inputs.file "$buildDir/$dexName"
+    inputs.file "$resourcePath"
+
+    outputs.file "$buildDir/$apkName"
+
+    destinationDir = file("${buildDir}")
+    duplicatesStrategy = 'fail'
+    from zipTree("$buildDir/$dexName")
+    from zipTree("$resourcePath")
+
+    doLast {
+        copy {
+            from "$buildDir/$apkName"
+            into "$baseAssetDir"
+            rename {
+                String fileName ->
+                    return fileName.split("\\.")[0] + ".so"
+            }
+        }
     }
 }

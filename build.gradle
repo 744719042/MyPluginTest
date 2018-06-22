@@ -29,5 +29,5 @@ task clean(type: Delete) {
 
 ext {
     makeAarType = 'hello'
-    aarVersion = '4.0.0'
+    aarVersion = ''
 }
