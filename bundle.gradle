@@ -1,9 +1,10 @@
 def baseBuildDir = project(":app").getBuildDir().getAbsolutePath()
 println baseBuildDir
 def baseApk = baseBuildDir + "/outputs/apk/debug/app-debug.apk"
-def baseClasses = baseBuildDir + "/intermediates/classes/debug"
+def baseLib = baseBuildDir + "/intermediates/jar/debug"
+def baseLibJar = baseLib + "/classes.jar"
 def baseR = baseBuildDir + "/generated/source/r/debug/com/example/mytest/R.java"
-def androidPath = "%ANDROID_HOME%/platforms/android-27/android.jar"
+def androidPath = "C:/Users/Administrator/AppData/Local/Android/sdk/platforms/android-27/android.jar"
 
 def pkgMap = ['login': '0x80', 'order': '0x90']
 
@@ -15,6 +16,8 @@ def resourcePath = "$resourceDir/resources.zip"
 
 def bundleResourceDir = file('/src/main/res').getAbsolutePath()
 def manifestPath = file('/src/main/AndroidManifest.xml').getAbsolutePath()
+def javaPath = file('/src/main/java').getAbsolutePath()
+def rPath = buildDir + "/generated/sources/r/debug/"
 
 def customPackage = "com.example." + project.name
 def packageId = pkgMap[project.name]
@@ -61,13 +64,14 @@ task aaptDebug(dependsOn: 'init') {
 
 /**
  */
-task complieJavaDebug(dependsOn: 'aaptDebug') {
+task compileJavaDebug(dependsOn: 'aaptDebug') {
+    unzipBaseApk("$baseApk", "$baseLib")
     StringBuilder command = new StringBuilder()
     command.append("javac").append(" ")
     command.append("-classpath").append(" ")
-    command.append("$baseClasses").append(";")
+    command.append("$baseLibJar").append(";")
     command.append("$androidPath").append(" ")
-    command.append("@").append(generateSourceFile()).append(" ")
+    command.append("@").append(generateSourceFile("$javaPath", "$rPath")).append(" ")
     command.append("-d $classDir")
     println command.toString()
     project.exec {
@@ -76,10 +80,27 @@ task complieJavaDebug(dependsOn: 'aaptDebug') {
     }
 }
 
-String generateSourceFile() {
-    def javaPath = file('/src/main/java').getAbsolutePath()
-    def rPath = buildDir.getAbsolutePath() + "/generated/sources/r/debug/"
+void unzipBaseApk(String baseApk, String baseLib) {
+    if (new File(baseLib).exists()) {
+        return
+    }
 
+    def command = "apktool d $baseApk -s -f -o $baseLib"
+    project.exec {
+        executable 'cmd'
+        args '/c', command
+    }
+
+    def dex2jar = "d2j-dex2jar $baseLib/classes.dex -o $baseLib/classes.jar"
+    println dex2jar
+    project.exec {
+        executable 'cmd'
+        args '/c', dex2jar
+    }
+
+}
+
+String generateSourceFile(String javaPath, String rPath) {
     File file = file('source.list')
     File javaDir = new File(javaPath)
     File rDir = new File(rPath)
