@@ -25,18 +25,20 @@ def customPackage = "com.example." + project.name
 def packageId = pkgMap[project.name]
 
 task init() {
-    File build = new File(buildDir)
-    if (build.exists()) {
-        build.deleteDir()
-    }
-    build.mkdir()
+    doLast {
+        File build = new File(buildDir)
+        if (build.exists()) {
+            build.deleteDir()
+        }
+        build.mkdir()
 
-    File sourceDir = new File(genSourceDir)
-    sourceDir.mkdirs()
-    File resDir = new File(resourceDir)
-    resDir.mkdirs()
-    File clsDir = new File(classDir)
-    clsDir.mkdirs()
+        File sourceDir = new File(genSourceDir)
+        sourceDir.mkdirs()
+        File resDir = new File(resourceDir)
+        resDir.mkdirs()
+        File clsDir = new File(classDir)
+        clsDir.mkdirs()
+    }
 }
 
 /**
@@ -45,40 +47,44 @@ task init() {
  generated/source/r/debug/com/example/mytest/R.java --apk-module "0x90"
  */
 task aaptDebug(dependsOn: 'init') {
-    StringBuilder command = new StringBuilder()
-    command.append("aapt_win package -f").append(" ")
-    command.append("-M $manifestPath").append(" ")
-    command.append("-I \"$androidPath\"").append(" ")
-    command.append("-I $baseApk").append(" ")
-    command.append("-S $bundleResourceDir").append(" ")
-    command.append("-J $genSourceDir -m").append(" ")
-    command.append("-F $resourcePath").append(" ")
-    command.append("--custom-package $customPackage -o 'apk'").append(" ")
-    command.append("--public-R-path $baseR").append(" ")
-    command.append("--apk-module \"$packageId\"").append(" ")
+    doLast {
+        StringBuilder command = new StringBuilder()
+        command.append("aapt_win package -f").append(" ")
+        command.append("-M $manifestPath").append(" ")
+        command.append("-I \"$androidPath\"").append(" ")
+        command.append("-I $baseApk").append(" ")
+        command.append("-S $bundleResourceDir").append(" ")
+        command.append("-J $genSourceDir -m").append(" ")
+        command.append("-F $resourcePath").append(" ")
+        command.append("--custom-package $customPackage -o 'apk'").append(" ")
+        command.append("--public-R-path $baseR").append(" ")
+        command.append("--apk-module \"$packageId\"").append(" ")
 
-    println command.toString()
-    project.exec {
-        executable 'cmd'
-        args '/c', command.toString()
+        println command.toString()
+        project.exec {
+            executable 'cmd'
+            args '/c', command.toString()
+        }
     }
 }
 
 /**
  */
 task compileJavaDebug(dependsOn: 'aaptDebug') {
-    unzipBaseApk("$baseApk", "$baseLib")
-    StringBuilder command = new StringBuilder()
-    command.append("javac").append(" ")
-    command.append("-classpath").append(" ")
-    command.append("$baseLibJar").append(";")
-    command.append("$androidPath").append(" ")
-    command.append("@").append(generateSourceFile("$javaPath", "$rPath")).append(" ")
-    command.append("-d $classDir")
-    println command.toString()
-    project.exec {
-        executable 'cmd'
-        args '/c', command.toString()
+    doLast {
+        unzipBaseApk("$baseApk", "$baseLib")
+        StringBuilder command = new StringBuilder()
+        command.append("javac").append(" ")
+        command.append("-classpath").append(" ")
+        command.append("$baseLibJar").append(";")
+        command.append("$androidPath").append(" ")
+        command.append("@").append(generateSourceFile("$javaPath", "$rPath")).append(" ")
+        command.append("-d $classDir")
+        println command.toString()
+        project.exec {
+            executable 'cmd'
+            args '/c', command.toString()
+        }
     }
 }
 
@@ -129,20 +135,22 @@ void getAllSources(File dir, List list) {
 }
 
 task makeDex(dependsOn: 'compileJavaDebug') {
-    String jarName = project.name + "-class.jar"
-    def command = "jar -cvf $buildDir/$jarName -C $classDir/ com/"
-    println command
-    project.exec {
-        executable 'cmd'
-        args '/c', command
-    }
+    doLast {
+        String jarName = project.name + "-class.jar"
+        def command = "jar -cvf $buildDir/$jarName -C $classDir/ com/"
+        println command
+        project.exec {
+            executable 'cmd'
+            args '/c', command
+        }
 
-    String dexName = project.name + ".jar"
-    def dex = "dx --dex --output=$buildDir/$dexName $buildDir/$jarName"
-    println dex
-    project.exec {
-        executable 'cmd'
-        args '/c', dex
+        String dexName = project.name + ".jar"
+        def dex = "dx --dex --output=$buildDir/$dexName $buildDir/$jarName"
+        println dex
+        project.exec {
+            executable 'cmd'
+            args '/c', dex
+        }
     }
 }
 
@@ -167,6 +175,23 @@ task buildBundle(type:Zip, dependsOn: 'makeDex') {
             rename {
                 String fileName ->
                     return fileName.split("\\.")[0] + ".so"
+            }
+        }
+    }
+}
+
+afterEvaluate {
+    def assembleDebug = project.tasks.findByName("assembleDebug")
+    assembleDebug.doLast {
+        def output = new File("$baseBuildDir/pluginminfests")
+        if (!output.exists()) {
+            output.mkdir()
+        }
+        copy {
+            from "$buildDir/intermediates/manifests/full/debug/AndroidManifest.xml"
+            into output
+            rename {
+                filename -> project.name + ".xml"
             }
         }
     }
