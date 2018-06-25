@@ -61,6 +61,11 @@ public class HookStartActivity {
             this.old = old;
         }
 
+        @Override
+        public void callActivityOnCreate(Activity activity, Bundle icicle) {
+            super.callActivityOnCreate(activity, icicle);
+        }
+
         public ActivityResult execStartActivity(
                 Context who, IBinder contextThread, IBinder token, Activity target,
                 Intent intent, int requestCode, Bundle options) {
@@ -86,8 +91,9 @@ public class HookStartActivity {
         }
 
         private void loadPluginResources(String pluginPath) {
-           ResourceHelper.mergeResources(ResourceHelper.getApplication(),
-                   ResourceHelper.getActivityThread(context), new String[] { pluginPath });
+            String apkPath = ResourceHelper.getApplication().getPackageResourcePath();
+            ResourceHelper.mergeResources(ResourceHelper.getApplication(),
+                   ResourceHelper.getActivityThread(context), new String[] { apkPath, pluginPath });
         }
 
         private void initPlugin(Context context, String plugin) {

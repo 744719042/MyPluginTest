@@ -10,6 +10,7 @@
     tools:context=".OrderActivity">
 
     <Button
+        android:id="@+id/order_detail"
         android:text="查看详细订单"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />

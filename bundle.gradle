@@ -8,7 +8,7 @@ def androidPath = "C:/Users/Administrator/AppData/Local/Android/sdk/platforms/an
 
 def baseAssetDir = project(":app").file("/src/main/assets/").getAbsolutePath()
 
-def pkgMap = ['login': '0x80', 'order': '0x90']
+def pkgMap = ['login': '0x40', 'order': '0x50']
 
 def buildDir = project.getBuildDir().getAbsolutePath()
 def genSourceDir = buildDir + "/generated/sources/r/debug/"
